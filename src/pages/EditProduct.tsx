@@ -1,62 +1,94 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getProduct, updateProduct, ProductUpdate } from "@/lib/supabase";
+import { Navbar } from "@/components/products/Navbar";
 import { ProductForm } from "@/components/products/ProductForm";
-import { useProduct, useUpdateProduct } from "@/hooks/useProducts";
-import { ProductInsert } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingSpinner } from "@/components/products/LoadingSpinner";
+import { useToast } from "@/hooks/use-toast";
+import { Package } from "lucide-react";
 
-export default function EditProduct() {
+const EditProduct = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: product, isLoading, error } = useProduct(id!);
-  const updateProduct = useUpdateProduct();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const handleSubmit = async (data: ProductInsert) => {
-    await updateProduct.mutateAsync({ id: id!, product: data });
-    navigate(`/products/${id}`);
+  const { data: product, isLoading, error } = useQuery({
+    queryKey: ['product', id],
+    queryFn: () => getProduct(id!),
+    enabled: !!id,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data: ProductUpdate) => updateProduct(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product', id] });
+      toast({ title: "Product updated successfully!" });
+      navigate(`/products/${id}`);
+    },
+    onError: () => {
+      toast({ title: "Failed to update product", variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = async (data: ProductUpdate) => {
+    await mutation.mutateAsync(data);
   };
 
   if (isLoading) {
     return (
-      <Layout>
-        <div className="container py-12">
-          <div className="mx-auto max-w-2xl space-y-6">
-            <Skeleton className="h-10 w-1/4" />
-            <Skeleton className="h-10 w-3/4" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-10 w-1/2" />
-          </div>
+      <div className="min-h-screen bg-background noise-overlay">
+        <Navbar />
+        <div className="pt-24">
+          <LoadingSpinner text="Loading product..." />
         </div>
-      </Layout>
+      </div>
     );
   }
 
   if (error || !product) {
     return (
-      <Layout>
-        <div className="container py-20 text-center">
-          <h1 className="font-display text-2xl">Product not found</h1>
-          <p className="mt-2 text-muted-foreground">
+      <div className="min-h-screen bg-background noise-overlay">
+        <Navbar />
+        <div className="page-container py-32 text-center fade-in">
+          <div className="w-24 h-24 mx-auto rounded-full bg-muted flex items-center justify-center mb-6">
+            <Package className="w-12 h-12 text-muted-foreground" />
+          </div>
+          <h2 className="text-3xl font-bold mb-3" style={{ fontFamily: 'var(--font-serif)' }}>
+            Product Not Found
+          </h2>
+          <p className="text-muted-foreground mb-8">
             The product you're trying to edit doesn't exist.
           </p>
-          <Link to="/">
-            <Button className="mt-6">Back to Shop</Button>
+          <Link to="/" className="btn-primary inline-block">
+            Back to Collection
           </Link>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="container py-12">
-        <ProductForm 
-          product={product}
-          onSubmit={handleSubmit}
-          isSubmitting={updateProduct.isPending}
-        />
+    <div className="min-h-screen bg-background noise-overlay">
+      <Navbar />
+
+      {/* Background glow */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-96 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-b from-accent/5 to-transparent" />
       </div>
-    </Layout>
+
+      <div className="page-container pt-28 pb-16 md:pt-32 md:pb-24 relative z-10">
+        <div className="max-w-2xl mx-auto slide-up">
+          <ProductForm
+            initialData={product}
+            onSubmit={handleSubmit}
+            isLoading={mutation.isPending}
+          />
+        </div>
+      </div>
+    </div>
   );
-}
+};
+
+export default EditProduct;

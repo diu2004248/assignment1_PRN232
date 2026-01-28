@@ -19,7 +19,7 @@ export async function getProducts(): Promise<Product[]> {
     .from('products')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -30,12 +30,9 @@ export async function getProduct(id: string): Promise<Product | null> {
     .from('products')
     .select('*')
     .eq('id', id)
-    .single();
-  
-  if (error) {
-    if (error.code === 'PGRST116') return null;
-    throw error;
-  }
+    .maybeSingle();
+
+  if (error) throw error;
   return data;
 }
 
@@ -46,7 +43,7 @@ export async function createProduct(product: ProductInsert): Promise<Product> {
     .insert(product)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -59,7 +56,7 @@ export async function updateProduct(id: string, product: ProductUpdate): Promise
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -70,6 +67,18 @@ export async function deleteProduct(id: string): Promise<void> {
     .from('products')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
+}
+
+// Search products by name
+export async function searchProducts(query: string): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .ilike('name', `%${query}%`)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
 }

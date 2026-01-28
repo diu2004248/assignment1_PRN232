@@ -1,169 +1,200 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft, Image as ImageIcon, Sparkles, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Product, ProductInsert } from "@/lib/supabase";
-
-const productSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
-  description: z.string().min(1, "Description is required").max(1000, "Description must be less than 1000 characters"),
-  price: z.coerce.number().min(0, "Price must be positive"),
-  image: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-});
-
-type ProductFormValues = z.infer<typeof productSchema>;
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import type { Product, ProductInsert, ProductUpdate } from "@/lib/supabase";
 
 interface ProductFormProps {
-  product?: Product;
-  onSubmit: (data: ProductInsert) => Promise<void>;
-  isSubmitting?: boolean;
+  initialData?: Product;
+  onSubmit: (data: ProductInsert | ProductUpdate) => Promise<void>;
+  isLoading?: boolean;
 }
 
-export function ProductForm({ product, onSubmit, isSubmitting }: ProductFormProps) {
+export function ProductForm({ initialData, onSubmit, isLoading }: ProductFormProps) {
   const navigate = useNavigate();
-  
-  const form = useForm<ProductFormValues>({
-    resolver: zodResolver(productSchema),
-    defaultValues: {
-      name: product?.name || "",
-      description: product?.description || "",
-      price: product?.price || 0,
-      image: product?.image || "",
-    },
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    name: initialData?.name || "",
+    description: initialData?.description || "",
+    price: initialData?.price?.toString() || "",
+    image: initialData?.image || "",
   });
 
-  const handleSubmit = async (values: ProductFormValues) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validation
+    if (!formData.name.trim()) {
+      toast({ title: "Name is required", variant: "destructive" });
+      return;
+    }
+    if (!formData.description.trim()) {
+      toast({ title: "Description is required", variant: "destructive" });
+      return;
+    }
+    if (!formData.price || isNaN(parseFloat(formData.price)) || parseFloat(formData.price) < 0) {
+      toast({ title: "Valid price is required", variant: "destructive" });
+      return;
+    }
+
     await onSubmit({
-      name: values.name,
-      description: values.description,
-      price: values.price,
-      image: values.image || null,
+      name: formData.name.trim(),
+      description: formData.description.trim(),
+      price: parseFloat(formData.price),
+      image: formData.image.trim() || null,
     });
   };
 
+  const isComplete = formData.name && formData.description && formData.price;
+
   return (
-    <div className="mx-auto max-w-2xl">
-      <Button
-        variant="ghost"
+    <form onSubmit={handleSubmit} className="space-y-8 max-w-2xl">
+      {/* Back button */}
+      <button
+        type="button"
         onClick={() => navigate(-1)}
-        className="mb-8 gap-2 pl-0 hover:bg-transparent hover:underline"
+        className="flex items-center gap-3 text-muted-foreground hover:text-foreground transition-all group"
       >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Button>
+        <div className="p-2 rounded-xl bg-muted group-hover:bg-muted/80 transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </div>
+        <span className="font-medium">Back</span>
+      </button>
 
-      <h1 className="font-display text-3xl font-semibold tracking-tight">
-        {product ? "Edit Product" : "Create Product"}
-      </h1>
-      <p className="mt-2 text-muted-foreground">
-        {product ? "Update the product details below" : "Fill in the details to add a new product"}
-      </p>
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="mt-8 space-y-6">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name *</FormLabel>
-                <FormControl>
-                  <Input placeholder="Classic White T-Shirt" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description *</FormLabel>
-                <FormControl>
-                  <Textarea 
-                    placeholder="A timeless piece crafted from premium organic cotton..."
-                    className="min-h-[120px] resize-none"
-                    {...field} 
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="price"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Price (USD) *</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    min="0"
-                    placeholder="49.99" 
-                    {...field} 
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="image"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Image URL</FormLabel>
-                <FormControl>
-                  <Input 
-                    placeholder="https://example.com/image.jpg" 
-                    {...field} 
-                  />
-                </FormControl>
-                <FormDescription>
-                  Optional. Enter a URL to an image of the product.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="flex gap-4 pt-4">
-            <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                product ? "Update Product" : "Create Product"
-              )}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => navigate(-1)}>
-              Cancel
-            </Button>
+      {/* Form Card */}
+      <div className="card-glass p-8 md:p-10 space-y-8">
+        {/* Header */}
+        <div className="flex items-center gap-4 pb-6 border-b border-border">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <Sparkles className="w-6 h-6 text-primary-foreground" />
           </div>
-        </form>
-      </Form>
-    </div>
+          <div>
+            <h2 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-serif)' }}>
+              {initialData ? "Edit Product" : "Create Product"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {initialData ? "Update your product details" : "Add a new item to your collection"}
+            </p>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div className="space-y-3">
+          <Label htmlFor="name" className="text-sm font-semibold flex items-center gap-2">
+            Product Name 
+            <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">Required</span>
+          </Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="e.g., Cashmere Oversized Sweater"
+            className="input-elegant h-14 text-base rounded-xl"
+            required
+          />
+        </div>
+
+        {/* Description */}
+        <div className="space-y-3">
+          <Label htmlFor="description" className="text-sm font-semibold flex items-center gap-2">
+            Description
+            <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">Required</span>
+          </Label>
+          <Textarea
+            id="description"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            placeholder="Describe your product in detail..."
+            rows={5}
+            className="input-elegant resize-none text-base rounded-xl"
+            required
+          />
+        </div>
+
+        {/* Price */}
+        <div className="space-y-3">
+          <Label htmlFor="price" className="text-sm font-semibold flex items-center gap-2">
+            Price (USD)
+            <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">Required</span>
+          </Label>
+          <div className="relative">
+            <span className="absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground font-medium text-lg">$</span>
+            <Input
+              id="price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.price}
+              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+              placeholder="0.00"
+              className="input-elegant h-14 pl-10 text-lg font-semibold rounded-xl"
+              required
+            />
+          </div>
+        </div>
+
+        {/* Image URL */}
+        <div className="space-y-3">
+          <Label htmlFor="image" className="text-sm font-semibold flex items-center gap-2">
+            <ImageIcon className="w-4 h-4" />
+            Image URL 
+            <span className="text-xs text-muted-foreground">(optional)</span>
+          </Label>
+          <Input
+            id="image"
+            type="url"
+            value={formData.image}
+            onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+            placeholder="https://example.com/image.jpg"
+            className="input-elegant h-14 text-base rounded-xl"
+          />
+          
+          {/* Image Preview */}
+          {formData.image && (
+            <div className="mt-4 rounded-2xl overflow-hidden border border-border bg-muted aspect-video max-w-sm relative group">
+              <img
+                src={formData.image}
+                alt="Preview"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
+                <span className="text-sm font-medium text-foreground">Image Preview</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Submit Buttons */}
+      <div className="flex flex-col sm:flex-row gap-4 pt-2">
+        <Button
+          type="submit"
+          disabled={isLoading}
+          className={`btn-primary flex-1 h-14 text-base ${isComplete ? 'pulse-glow' : ''}`}
+        >
+          {isLoading ? (
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+          ) : (
+            <Check className="w-5 h-5 mr-2" />
+          )}
+          {initialData ? "Save Changes" : "Create Product"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => navigate(-1)}
+          className="h-14 px-8 rounded-xl border-border hover:bg-muted transition-all"
+        >
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
